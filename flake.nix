@@ -53,6 +53,9 @@
               gitleaks
               statix
               deadnix
+
+              # python dependency
+              isort
             ];
 
             DEV_SHELL = "pkgs";
