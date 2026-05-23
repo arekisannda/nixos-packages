@@ -1,30 +1,33 @@
-from functools import partial
+from pathlib import Path
+from typing import List
 
-from i3ipc import Connection, Event
+from i3ipc import Connection, Event, OutputReply
 
-from . import layout as sway_layout
-from .schema import Config
+from . import config as dm_config
+from . import layout as dm_layout
 from . import utils
+from .schema import Config, ApplyLayout 
 
 
-def on_output_event(config: dict, ipc: Connection, event: Event) -> None:
-    apply_layout(config, ipc)
+_CURRENT_CONFIGS = Config()
+_LAST_TARGET = None
+
+def on_output_event(ipc: Connection, event: Event) -> None:
+    apply_layout(_CURRENT_CONFIGS, ipc)
 
 
 def apply_layout(config: Config, ipc: Connection) -> None:
-    outputs = ipc.get_outputs()
-    result = sway_layout.get_layout(config, outputs)
-    if not result:
+    outputs: List[OutputReply] = ipc.get_outputs()
+    layout: ApplyLayout = dm_layout.get_layout(config, outputs, _LAST_TARGET)
+    if not layout:
         return
-
-    layout_name, layout, commands = result
 
     output_by_name = {o.name: o for o in outputs}
 
-    for apply in layout:
+    for apply in layout.outputs:
         current = output_by_name.get(apply.name)
-        if current and sway_layout.is_output_already_configured(current, apply):
-            utils.debug(f"{layout_name} is already the desired state, skip")
+        if current and dm_layout.is_output_already_configured(current, apply):
+            utils.debug(f"{layout.name} is already the desired state, skip")
             continue
 
         if apply.active:
@@ -42,23 +45,25 @@ def apply_layout(config: Config, ipc: Connection) -> None:
             ipc.command(f"output {apply.name} disable;")
 
 
-    utils.info(f"Current layout: {layout_name}")
-    utils.debug(f"Layout: {layout}")
+    utils.info(f"Current layout: {layout.name}")
+    utils.debug(f"Layout: {layout.outputs}")
 
-    alias_to_output_name = {apply.alias: apply.name for apply in layout if apply.alias}
-    utils.debug(f"Aliases to output: {alias_to_output_name}")
+    alias_to_output_name = {apply.alias: apply.name for apply in layout.outputs if apply.alias}
+    utils.debug(f"Aliases: {alias_to_output_name}")
 
-    if commands:
+    if layout.commands:
         utils.debug("Run commands")
-        for ind, cmd in enumerate(commands):
+        for ind, cmd in enumerate(layout.commands):
             cmd = cmd.format_map(alias_to_output_name)
             utils.debug(f"{ind}: {cmd}")
             ipc.command(cmd)
 
 
-def start_watcher(config: Config) -> None:
+def start_watcher(config_file_path: Path) -> None:
+    config = dm_config.load_config(config_file_path)
+
     ipc = Connection()
-    ipc.on(Event.OUTPUT, partial(on_output_event, config))
+    ipc.on(Event.OUTPUT, on_output_event)
 
     apply_layout(config, ipc)
 

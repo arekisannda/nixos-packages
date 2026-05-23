@@ -35,12 +35,20 @@ class Layout:
 class Config:
     layouts: List[Layout] = field(default_factory=list)
 
+
 @dataclass
-class ApplyLayout:
+class ApplyOutput:
     name: str
     active: bool
     fallback: bool
     alias: Optional[str] = None
     mode: Optional[Mode] = None
     position: Optional[Position] = None
+
+
+@dataclass
+class ApplyLayout:
+    name: str
+    outputs: List[ApplyOutput] = field(default_factory=list)
+    commands: List[str] = field(default_factory=list)
 

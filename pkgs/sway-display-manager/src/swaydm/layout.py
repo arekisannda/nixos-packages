@@ -3,10 +3,10 @@ from typing import List, Optional
 from i3ipc import OutputReply
 
 from . import utils
-from .schema import ApplyLayout, Config, Layout, Mode, Position
+from .schema import ApplyLayout, ApplyOutput, Config, Layout, Mode, Position
 
 
-def is_output_already_configured(output: OutputReply, apply: ApplyLayout) -> bool:
+def is_output_already_configured(output: OutputReply, apply: ApplyOutput) -> bool:
     if not apply.active:
         return not output.active
     if not output.active:
@@ -52,10 +52,10 @@ def matches_display_mode(output: OutputReply, want: Mode) -> bool:
     return False 
 
 
-def get_layout_output_mapping(layout: Layout, outputs: List[OutputReply]) -> List[ApplyLayout]:
-    assigned: dict[str, ApplyLayout] = {}
+def get_layout_output_mapping(layout: Layout, outputs: List[OutputReply]) -> List[ApplyOutput]:
+    assigned: dict[str, ApplyOutput] = {}
     used: set[str] = set()
-    result: list[ApplyLayout] = []
+    result: list[ApplyOutput] = []
 
     for ind, display in enumerate(layout.displays):
         chosen: Optional[dict] = None
@@ -77,14 +77,13 @@ def get_layout_output_mapping(layout: Layout, outputs: List[OutputReply]) -> Lis
             break
 
         if chosen is None:
-            utils.debug(f"{__name__} - {layout.name} cannot be configured")
             raise ValueError(
                 f"No sway output matches display {display.name!r} "
                 f"with the requested mode"
             )
 
         used.add(chosen.name)
-        assigned[chosen.name] = ApplyLayout(
+        assigned[chosen.name] = ApplyOutput(
             name=chosen.name,
             alias=display.alias,
             active=True,
@@ -98,31 +97,44 @@ def get_layout_output_mapping(layout: Layout, outputs: List[OutputReply]) -> Lis
         if output.name in assigned:
             result.append(assigned[output.name])
         else:
-            result.append(ApplyLayout(name=output.name, active=False, fallback=False))
+            result.append(ApplyOutput(name=output.name, active=False, fallback=False))
 
     return result
 
 
-def get_layout(config: Config, outputs: List[OutputReply]) -> tuple[str, List[ApplyLayout], List[str]]:
-    valid: List[tuple[str, List[ApplyLayout]]] = []
+def get_layout(config: Config, outputs: List[OutputReply], target: Optional[str] = None) -> ApplyLayout:
+    valid: List[ApplyLayout] = []
 
-    for layout in config.layouts:
+    layouts = [cl for cl in config.layouts if cl.name == target] if target else config.layouts
+
+    if not layouts and target:
+        utils.debug(f"\"{target}\" is not a layout profile")
+        raise ValueError(
+            f"\"{target}\" is not a layout profile"
+        )
+
+    for layout in layouts:
         try:
-            valid.append((layout.name, get_layout_output_mapping(layout, outputs), layout.commands))
-        except ValueError:
-           continue 
+            valid.append(ApplyLayout(
+                name=layout.name,
+                outputs=get_layout_output_mapping(layout, outputs),
+                commands=layout.commands
+            ))
+        except ValueError as e:
+            utils.debug(f"{layout.name} cannot be configured - {e}")
+            continue 
 
     if valid:
         return valid[0]
 
-    fallback_layout: List[ApplyLayout] = []
+    fallback_outputs: List[ApplyOutput] = []
     current_width = 0
     for output in outputs:
         width = output.modes[0].width
         height = output.modes[0].height
         refresh = round(output.modes[0].refresh / 1000)
-        fallback_layout.append(
-            ApplyLayout(
+        fallback_outputs.append(
+            ApplyOutput(
                 name=output.name,
                 alias=None,
                 active=True,
@@ -135,5 +147,9 @@ def get_layout(config: Config, outputs: List[OutputReply]) -> tuple[str, List[Ap
             ))
         current_width += width
 
-    return ("FALLBACK", fallback_layout, [])
+    return ApplyLayout(
+        name="FALLBACK",
+        outputs=fallback_outputs,
+        commands=[]
+    )
 
