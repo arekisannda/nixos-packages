@@ -86,6 +86,7 @@ def get_layout_output_mapping(layout: Layout, outputs: List[OutputReply]) -> Lis
         used.add(chosen.name)
         assigned[chosen.name] = ApplyLayout(
             name=chosen.name,
+            alias=display.alias,
             active=True,
             fallback=False,
             mode=display.mode,
@@ -102,20 +103,19 @@ def get_layout_output_mapping(layout: Layout, outputs: List[OutputReply]) -> Lis
     return result
 
 
-def get_layout(config: Config, outputs: List[OutputReply]) -> tuple[str, List[ApplyLayout]]:
+def get_layout(config: Config, outputs: List[OutputReply]) -> tuple[str, List[ApplyLayout], List[str]]:
     valid: List[tuple[str, List[ApplyLayout]]] = []
 
     for layout in config.layouts:
         try:
-            valid.append((layout.name, get_layout_output_mapping(layout, outputs)))
-        except ValueError as e:
+            valid.append((layout.name, get_layout_output_mapping(layout, outputs), layout.commands))
+        except ValueError:
            continue 
-        # print(f"[Basic] Caught: {e}")
 
     if valid:
         return valid[0]
 
-    fallback_layout: List[ApplyLayout] =[]
+    fallback_layout: List[ApplyLayout] = []
     current_width = 0
     for output in outputs:
         width = output.modes[0].width
@@ -124,6 +124,7 @@ def get_layout(config: Config, outputs: List[OutputReply]) -> tuple[str, List[Ap
         fallback_layout.append(
             ApplyLayout(
                 name=output.name,
+                alias=None,
                 active=True,
                 fallback=True,
                 mode=Mode(width=width,
@@ -134,5 +135,5 @@ def get_layout(config: Config, outputs: List[OutputReply]) -> tuple[str, List[Ap
             ))
         current_width += width
 
-    return ("FALLBACK", fallback_layout)
+    return ("FALLBACK", fallback_layout, [])
 

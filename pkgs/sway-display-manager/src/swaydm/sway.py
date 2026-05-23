@@ -17,7 +17,7 @@ def apply_layout(config: Config, ipc: Connection) -> None:
     if not result:
         return
 
-    layout_name, layout = result
+    layout_name, layout, commands = result
 
     output_by_name = {o.name: o for o in outputs}
 
@@ -25,7 +25,7 @@ def apply_layout(config: Config, ipc: Connection) -> None:
         current = output_by_name.get(apply.name)
         if current and sway_layout.is_output_already_configured(current, apply):
             utils.debug(f"{layout_name} is already the desired state, skip")
-            continue 
+            continue
 
         if apply.active:
             m, p = apply.mode, apply.position
@@ -44,7 +44,17 @@ def apply_layout(config: Config, ipc: Connection) -> None:
 
     utils.info(f"Current layout: {layout_name}")
     utils.debug(f"Layout: {layout}")
-    
+
+    alias_to_output_name = {apply.alias: apply.name for apply in layout if apply.alias}
+    utils.debug(f"Aliases to output: {alias_to_output_name}")
+
+    if commands:
+        utils.debug("Run commands")
+        for ind, cmd in enumerate(commands):
+            cmd = cmd.format_map(alias_to_output_name)
+            utils.debug(f"{ind}: {cmd}")
+            ipc.command(cmd)
+
 
 def start_watcher(config: Config) -> None:
     ipc = Connection()
@@ -53,4 +63,3 @@ def start_watcher(config: Config) -> None:
     apply_layout(config, ipc)
 
     ipc.main()
-

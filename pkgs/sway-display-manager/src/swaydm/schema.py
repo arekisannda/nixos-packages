@@ -19,6 +19,7 @@ class Position:
 @dataclass
 class Display:
     name: str
+    alias: Optional[str] = None
     mode: Optional[Mode] = None
     position: Optional[Position] = None
 
@@ -27,6 +28,7 @@ class Display:
 class Layout:
     name: str
     displays: List[Display] = field(default_factory=list)
+    commands: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -38,6 +40,7 @@ class ApplyLayout:
     name: str
     active: bool
     fallback: bool
+    alias: Optional[str] = None
     mode: Optional[Mode] = None
     position: Optional[Position] = None
 
