@@ -3,17 +3,29 @@ from typing import List, Optional
 from i3ipc import OutputReply
 
 from . import utils
-from .schema import ApplyLayout, ApplyOutput, Config, Layout, Mode, Position
+from .datatypes import (
+    ApplyProfile,
+    ApplyOutput,
+    Config,
+    Profile,
+    Mode,
+    Position,
+    FALLBACK,
+)
 
 
-def is_output_already_configured(output: OutputReply, apply: ApplyOutput) -> bool:
+def is_output_already_configured(
+    output: OutputReply, apply: ApplyOutput
+) -> bool:
     if not apply.active:
         return not output.active
     if not output.active:
         return False
     m = apply.mode
     p = apply.position
-    current_refresh_hz = round((output.current_mode.refresh if output.current_mode else 0) / 1000)
+    current_refresh_hz = round(
+        (output.current_mode.refresh if output.current_mode else 0) / 1000
+    )
     return (
         output.rect.x == p.x
         and output.rect.y == p.y
@@ -49,31 +61,39 @@ def matches_display_mode(output: OutputReply, want: Mode) -> bool:
         refresh_hz = round(m.refresh / 1000)
         if abs(refresh_hz - want.refresh) <= 1:
             return True
-    return False 
+    return False
 
 
-def get_layout_output_mapping(layout: Layout, outputs: List[OutputReply]) -> List[ApplyOutput]:
+def get_profile_output_mapping(
+    profile: Profile, outputs: List[OutputReply]
+) -> List[ApplyOutput]:
     assigned: dict[str, ApplyOutput] = {}
     used: set[str] = set()
     result: list[ApplyOutput] = []
 
-    for ind, display in enumerate(layout.displays):
+    for ind, display in enumerate(profile.displays):
         chosen: Optional[dict] = None
         if display.mode is None:
             continue
 
         for output in outputs:
             if output.name in used:
-                utils.debug(f"{__name__} - Skip {output.name} is used")
+                utils.trace(f"Skip {output.name} is used")
                 continue
             if not matches_display_name(output, display.name):
-                utils.debug(f"{__name__} - {display.name}:{ind} does not match an output")
+                utils.trace(f"{display.name!r}:{ind} does not match an output")
                 continue
-            if display.mode is not None and not matches_display_mode(output, display.mode):
-                utils.debug(f"{__name__} - {display.name}:{ind} does not match {output.name} mode")
+            if display.mode is not None and not matches_display_mode(
+                output, display.mode
+            ):
+                utils.trace(
+                    f"{display.name!r}:{ind} does not match {output.name!r} mode"
+                )
                 continue
             chosen = output
-            utils.debug(f"{__name__} - {display.name}:{ind} match {output.name}")
+            utils.trace(
+                f"{profile.name!r} request {ind}:{display.name!r} matched {output.name!r}"
+            )
             break
 
         if chosen is None:
@@ -92,37 +112,45 @@ def get_layout_output_mapping(layout: Layout, outputs: List[OutputReply]) -> Lis
             position=display.position,
         )
 
-    # Disable everything not claimed by the layout.
+    # Disable everything not claimed by the profile.
     for output in outputs:
         if output.name in assigned:
             result.append(assigned[output.name])
         else:
-            result.append(ApplyOutput(name=output.name, active=False, fallback=False))
+            result.append(
+                ApplyOutput(name=output.name, active=False, fallback=False)
+            )
 
     return result
 
 
-def get_layout(config: Config, outputs: List[OutputReply], target: Optional[str] = None) -> ApplyLayout:
-    valid: List[ApplyLayout] = []
+def get_profile(
+    config: Config, outputs: List[OutputReply], profile: Optional[str] = None
+) -> ApplyProfile:
+    valid: List[ApplyProfile] = []
 
-    layouts = [cl for cl in config.layouts if cl.name == target] if target else config.layouts
+    profiles = (
+        [cl for cl in config.profiles if cl.name == profile]
+        if profile
+        else config.profiles
+    )
 
-    if not layouts and target:
-        utils.debug(f"\"{target}\" is not a layout profile")
-        raise ValueError(
-            f"\"{target}\" is not a layout profile"
-        )
+    if not profiles and profile:
+        utils.debug(f"{profile!r} is not a profile")
+        raise ValueError(f"{profile!r} is not a profile")
 
-    for layout in layouts:
+    for p in profiles:
         try:
-            valid.append(ApplyLayout(
-                name=layout.name,
-                outputs=get_layout_output_mapping(layout, outputs),
-                commands=layout.commands
-            ))
+            valid.append(
+                ApplyProfile(
+                    name=p.name,
+                    outputs=get_profile_output_mapping(p, outputs),
+                    commands=p.commands,
+                )
+            )
         except ValueError as e:
-            utils.debug(f"{layout.name} cannot be configured - {e}")
-            continue 
+            utils.debug(f"{p.name!r} cannot be configured - {e}")
+            continue
 
     if valid:
         return valid[0]
@@ -139,17 +167,12 @@ def get_layout(config: Config, outputs: List[OutputReply], target: Optional[str]
                 alias=None,
                 active=True,
                 fallback=True,
-                mode=Mode(width=width,
-                          height=height,
-                          refresh=refresh,
-                          scale=1.0),
-                position=Position(x=current_width, y=0)
-            ))
+                mode=Mode(
+                    width=width, height=height, refresh=refresh, scale=1.0
+                ),
+                position=Position(x=current_width, y=0),
+            )
+        )
         current_width += width
 
-    return ApplyLayout(
-        name="FALLBACK",
-        outputs=fallback_outputs,
-        commands=[]
-    )
-
+    return ApplyProfile(name=FALLBACK, outputs=fallback_outputs, commands=[])
