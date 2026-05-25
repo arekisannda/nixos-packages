@@ -2,14 +2,18 @@ import os
 import socket
 import sys
 import threading
+from dataclasses import dataclass
 from typing import Callable
 
 from . import utils
-from .datatypes import IPCManager
+
+
+@dataclass
+class IPCManager:
+    socket: str
+
 
 DEFAULT_SOCKET_PATH = "/tmp/swaydm.sock"
-
-
 mgr: IPCManager = IPCManager(socket=DEFAULT_SOCKET_PATH)
 
 

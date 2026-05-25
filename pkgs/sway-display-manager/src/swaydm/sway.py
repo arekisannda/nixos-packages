@@ -1,12 +1,101 @@
+import json
 import threading
 import uuid
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from pprint import pformat
+from typing import Callable, List, Optional
 
 from i3ipc import Connection, Event, OutputEvent, OutputReply
 
 from . import config, profile, utils
-from .datatypes import FALLBACK, ApplyProfile, DisplayManager, StatusOutput
+from .datatypes import FALLBACK, ApplyOutput, ApplyProfile, Config, Profile
+
+
+@dataclass
+class StatusOutput:
+    active: bool
+    profile: str
+    current_config: Config
+    layout: List[ApplyOutput] = field(default_factory=list)
+
+    def format(self, verbose: bool = False) -> str:
+        layout = [
+            (
+                f"\n{p.name!r}\t"
+                f"{p.mode.width}x{p.mode.height}@{p.mode.refresh}Hz "
+                f"({p.position.x},{p.position.y})"
+            )
+            if p.mode and p.position
+            else f"\n{p.name!r} disabled"
+            for p in self.layout
+        ]
+
+        lines = [
+            f"Active: {'yes' if self.active else 'no'}",
+            f"Profile: {self.profile}",
+            f"Layout: {''.join(layout)}",
+        ]
+
+        if verbose:
+            lines.append(
+                pformat(asdict(self.current_config), width=1, sort_dicts=False)
+            )
+        return "\n".join(lines)
+
+    def format_json(self, verbose: bool = False) -> str:
+        layout = {
+            p.name: {
+                'mode': f"{p.mode.width}x{p.mode.height}@{p.mode.refresh}Hz",
+                'position': f"{p.position.x},{p.position.y}",
+            }
+            if p.mode and p.position
+            else None
+            for p in self.layout
+        }
+        json_out = {
+            'active': self.active,
+            'profile': self.profile,
+            'layout': layout,
+        }
+
+        if verbose:
+            json_out['config'] = asdict(self.current_config)
+
+        return json.dumps(json_out, indent=2, default=str)
+
+
+@dataclass
+class DisplayManager:
+    config_loader: Callable[[Path], Config]
+    config: Config = field(default_factory=Config)
+    ipc: Connection = field(default_factory=Connection)
+    current_profile: Optional[str] = None
+    _config_file_path: Optional[str] = None
+    _profile_map: dict[str, Profile] = field(default_factory=dict)
+    _auto: bool = True
+
+    def toggle_auto_apply(self) -> None:
+        self._auto = not self._auto
+
+    def is_active(self) -> bool:
+        return self._auto
+
+    def update_profile_map(self) -> None:
+        self._profile_map.clear()
+        self._profile_map = {p.name: p for p in self.config.profiles}
+
+    def get_profile(self, target_profile: str) -> Optional[str]:
+        return self._profile_map.get(target_profile, None)
+
+    def load_config(self, config_file_path: Path) -> None:
+        self._config_file_path = config_file_path
+        self.config = self.config_loader(self._config_file_path)
+        self.update_profile_map()
+
+    def reload_config(self) -> None:
+        self.load_config(self._config_file_path)
+
 
 mgr: DisplayManager = DisplayManager(config_loader=config.load_config)
 
@@ -15,27 +104,34 @@ _apply_lock = threading.Lock()
 
 def on_output_event(ipc: Connection, event: OutputEvent) -> None:
     utils.trace(f"handling {event.ipc_data}")
-    appply_profile_auto_select()
+    apply_profile_auto_select()
 
 
-def appply_profile_auto_select() -> None:
+def apply_profile_auto_select() -> None:
     req_id = uuid.uuid4()
     with _apply_lock:
         utils.trace("apply auto-select profile")
-        apply_profile(req_id, mgr.ipc, target_profile_name=mgr.current_profile)
+        apply_profile(
+            req_id, mgr.ipc, mgr.config, target_profile_name=mgr.current_profile
+        )
         utils.trace(f"--{req_id} completed--")
 
 
-def appply_profile_target(target_profile_name: str) -> None:
+def apply_profile_target(target_profile_name: str) -> None:
     req_id = uuid.uuid4()
     with _apply_lock:
         utils.trace(f"apply {target_profile_name}")
-        apply_profile(req_id, mgr.ipc, target_profile_name=target_profile_name)
+        apply_profile(
+            req_id, mgr.ipc, mgr.config, target_profile_name=target_profile_name
+        )
         utils.trace(f"--{req_id} completed--")
 
 
 def apply_profile(
-    uuid: uuid.UUID, ipc: Connection, target_profile_name: Optional[str]
+    uuid: uuid.UUID,
+    ipc: Connection,
+    config: Config,
+    target_profile_name: Optional[str],
 ) -> None:
     if not mgr.is_active():
         utils.debug("Display manager auto-apply is paused")
@@ -43,6 +139,12 @@ def apply_profile(
 
     utils.trace(f"-------------------{uuid} start --------------------------")
     outputs: List[OutputReply] = ipc.get_outputs()
+
+    if target_profile_name is FALLBACK:
+        utils.debug(
+            f"{target_profile_name!r} is the fallback profile {FALLBACK!r}. use blank config"
+        )
+        config = Config()
 
     # check if current_profile still exists in config
     if mgr.get_profile(target_profile_name) is None:
@@ -52,7 +154,7 @@ def apply_profile(
         target_profile_name = None
 
     target_profile: ApplyProfile = profile.get_profile(
-        mgr.config, outputs, target_profile_name
+        config, outputs, target_profile_name
     )
 
     if target_profile_name and target_profile.name == FALLBACK:
@@ -113,7 +215,7 @@ def command_handler(command: str) -> str:
         case "toggle_auto_apply":
             utils.info("Toggle display manager auto")
             mgr.toggle_auto_apply()
-            appply_profile_auto_select()
+            apply_profile_auto_select()
             if mgr.is_active():
                 return "Auto-apply resumed"
             else:
@@ -122,7 +224,7 @@ def command_handler(command: str) -> str:
         case "reload":
             utils.info("Reloading configurations")
             mgr.reload_config()
-            appply_profile_auto_select()
+            apply_profile_auto_select()
             return "Configuration reloaded"
 
         case "list_profiles":
@@ -157,7 +259,7 @@ def command_handler(command: str) -> str:
                 utils.warning(f"{profile_name!r} is not a valid profile.")
                 return f"error: {profile_name!r} is not a valid profile."
             try:
-                appply_profile_target(profile_name)
+                apply_profile_target(profile_name)
             except RuntimeError as e:
                 utils.warning(f"Failed to apply profile: {e}")
                 return f"Unable to switch to {profile_name!r}"
@@ -171,7 +273,7 @@ def start_watcher(config_file_path: Path) -> None:
     mgr.load_config(config_file_path)
     mgr.ipc.on(Event.OUTPUT, on_output_event)
 
-    appply_profile_auto_select()
+    apply_profile_auto_select()
 
     utils.debug(f"Starting Sway output watcher {str(config_file_path)!r}")
     mgr.ipc.main()
