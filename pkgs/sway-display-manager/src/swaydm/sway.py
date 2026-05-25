@@ -171,7 +171,7 @@ def start_watcher(config_file_path: Path) -> None:
     mgr.load_config(config_file_path)
     mgr.ipc.on(Event.OUTPUT, on_output_event)
 
-    appply_profile_target(target_profile_name=None)
+    appply_profile_auto_select()
 
     utils.debug(f"Starting Sway output watcher {str(config_file_path)!r}")
     mgr.ipc.main()
