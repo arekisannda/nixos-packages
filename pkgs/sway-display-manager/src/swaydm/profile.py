@@ -139,6 +139,8 @@ def get_profile(
         raise ValueError(f"{profile!r} is not a profile")
 
     for p in profiles:
+        if not p.auto and profile is None:
+            continue
         try:
             valid.append(
                 ApplyProfile(

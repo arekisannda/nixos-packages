@@ -29,6 +29,7 @@ class Display:
 @dataclass
 class Profile:
     name: str
+    auto: bool = True
     displays: List[Display] = field(default_factory=list)
     commands: List[str] = field(default_factory=list)
 

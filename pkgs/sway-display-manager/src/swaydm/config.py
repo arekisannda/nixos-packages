@@ -28,6 +28,7 @@ def parse_profile(d: dict) -> Profile:
 
     return Profile(
         name=d["name"],
+        auto=d.get("auto", True),
         displays=[parse_display(d) for d in d.get("displays", [])],
         commands=d.get("commands", []),
     )
