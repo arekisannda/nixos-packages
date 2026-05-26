@@ -1,0 +1,12 @@
+from enum import IntEnum, unique
+
+
+@unique
+class Code(IntEnum):
+    OK = 0
+    ERROR = 1
+
+
+def exit_status(code: Code) -> int:
+    """Map a protocol code to a process exit code."""
+    return 0 if code is Code.OK else 1

@@ -9,7 +9,10 @@ from typing import Callable, List, Optional, Set
 from i3ipc import Connection, Event, OutputEvent, OutputReply
 
 from . import config, profile, utils
+from .code import Code
 from .datatypes import FALLBACK, ApplyOutput, ApplyProfile, Config
+
+OK, ERROR = (Code.OK, Code.ERROR)
 
 
 @dataclass
@@ -234,6 +237,13 @@ def apply_profile(
     utils.trace(f"-------------------{uuid} end --------------------------")
 
 
+def command_resp(
+    resp_code: Code,
+    msg: str,
+) -> str:
+    return f"{resp_code}\n{msg}"
+
+
 def command_handler(command: str) -> str:
     parts = command.split()
     if not parts:
@@ -245,18 +255,20 @@ def command_handler(command: str) -> str:
             mgr.toggle_auto_apply()
             apply_profile_auto_select()
             if mgr.is_active():
-                return "Auto-apply resumed"
+                return command_resp(OK, "Auto-apply resumed")
             else:
-                return "Auto-apply paused"
+                return command_resp(OK, "Auto-apply paused")
 
         case "reload":
             utils.info("Reloading configurations")
             mgr.reload_config()
             apply_profile_auto_select()
-            return "Configuration reloaded"
+            return command_resp(OK, "Configuration reloaded")
 
         case "list_profiles":
-            return f"{'\n'.join([p.name for p in mgr.config.profiles])}"
+            return command_resp(
+                OK, f"{'\n'.join([p.name for p in mgr.config.profiles])}"
+            )
 
         case "status" | "status_json":
             current_profile = profile.get_profile(
@@ -273,33 +285,37 @@ def command_handler(command: str) -> str:
             verbose = len(parts) >= 2 and parts[1] == "verbose"
             match parts[0]:
                 case "status":
-                    return output_info.format(verbose)
+                    return command_resp(OK, output_info.format(verbose))
                 case "status_json":
-                    return output_info.format_json(verbose)
+                    return command_resp(OK, output_info.format_json(verbose))
 
         case "switch_profile":
             if len(parts) < 2:
-                return "error: usage: switch <profile>"
+                return command_resp(ERROR, "usage: switch <profile>")
 
             profile_name = parts[1]
             utils.info(f"Switching profile to {profile_name}")
 
             if profile_name == FALLBACK:
                 apply_profile_fallback()
-                return f"Switched to {FALLBACK!r}"
+                return command_resp(OK, f"Switched to {FALLBACK!r}")
 
-            if mgr.get_profile(profile_name) is None:
+            if not mgr.is_profile_valid(profile_name):
                 utils.warning(f"{profile_name!r} is not a valid profile.")
-                return f"error: {profile_name!r} is not a valid profile."
+                return command_resp(
+                    ERROR, f"{profile_name!r} is not a valid profile."
+                )
             try:
                 apply_profile_target(profile_name)
             except RuntimeError as e:
                 utils.warning(f"Failed to apply profile: {e}")
-                return f"Unable to switch to {profile_name!r}"
-            return f"Switched to {profile_name!r}"
+                return command_resp(
+                    ERROR, f"Unable to switch to {profile_name!r}"
+                )
+            return command_resp(OK, f"Switched to {profile_name!r}")
 
         case _:
-            return f"error: unknown command {parts[0]!r}"
+            return command_resp(ERROR, f"error: unknown command {parts[0]!r}")
 
 
 def start_watcher(config_file_path: Path) -> None:

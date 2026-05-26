@@ -5,7 +5,7 @@ import threading
 from dataclasses import dataclass
 from typing import Callable
 
-from . import utils
+from . import utils, code
 
 
 @dataclass
@@ -47,8 +47,8 @@ def start_server(handler: Callable[[str], None]) -> None:
             conn, _ = server.accept()
             with conn:
                 data = conn.recv(1024).decode().strip()
-                utils.debug(f"IPC Server - Accept: {data!r}")
-                response = handler(data) + "\n"
+                utils.debug(f"IPC Server - Accept - {data!r}")
+                response = handler(data)
                 try:
                     conn.sendall(response.encode())
                 except BrokenPipeError:
@@ -62,6 +62,11 @@ def start_server(handler: Callable[[str], None]) -> None:
     thread.start()
 
 
+def parse_response(raw: str) -> tuple[code.Code, str]:
+    code_str, _, body = raw.partition("\n")
+    return code.Code(int(code_str)), body
+
+
 def send_command(command: str) -> None:
     client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     client.connect(mgr.socket)
@@ -69,9 +74,13 @@ def send_command(command: str) -> None:
     utils.debug(f"IPC Client - Send: {command!r}")
     client.sendall(command.encode())
     client.shutdown(socket.SHUT_WR)
-    response = client.recv(4096).decode()
-    print(response, end="")
+    resp_code, response = parse_response(client.recv(4096).decode())
+    if resp_code is code.Code.OK:
+        print(response)
+    else:
+        utils.error(response)
     client.close()
+    sys.exit(code.exit_status(resp_code))
 
 
 def switch_profile(profile: str) -> None:
