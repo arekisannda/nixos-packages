@@ -6,7 +6,13 @@ from pathlib import Path
 from pprint import pformat
 from typing import Callable, List, Optional, Set
 
-from i3ipc import Connection, Event, OutputEvent, OutputReply
+from i3ipc import (
+    BarconfigUpdateEvent,
+    Connection,
+    Event,
+    OutputEvent,
+    OutputReply,
+)
 
 from . import config, profile, utils
 from .code import Code
@@ -318,8 +324,16 @@ def command_handler(command: str) -> str:
             return command_resp(ERROR, f"error: unknown command {parts[0]!r}")
 
 
+def on_config_reload_event(
+    ipc: Connection, event: BarconfigUpdateEvent
+) -> None:
+    utils.trace("handling Sway configuration reload event")
+    apply_profile_auto_select()
+
+
 def start_watcher(config_file_path: Path) -> None:
     mgr.load_config(config_file_path)
+    mgr.ipc.on(Event.BARCONFIG_UPDATE, on_config_reload_event)
     mgr.ipc.on(Event.OUTPUT, on_output_event)
     mgr.update_output_state(mgr.ipc.get_outputs())
 
