@@ -122,10 +122,8 @@ _apply_lock = threading.Lock()
 
 def on_output_event(ipc: Connection, event: OutputEvent) -> None:
     utils.trace(f"handling {event.ipc_data}")
-    new_output_list = ipc.get_outputs()
-    is_set_changed = mgr.is_output_set_changed(new_output_list)
 
-    if is_set_changed:
+    if mgr.is_output_set_changed(ipc.get_outputs()):
         # list of output devices has changed
         utils.debug("output event detected addition/removal of outputs")
         utils.debug(f"previous profile {mgr.current_profile!r} ==> None")
