@@ -19,8 +19,7 @@ def is_output_already_configured(
 ) -> bool:
     if not apply.active:
         return not output.active
-    if not output.active:
-        return False
+
     m = apply.mode
     p = apply.position
     current_refresh_hz = round(
@@ -135,7 +134,7 @@ def get_profile(
         else config.profiles
     )
 
-    if not profiles and profile:
+    if not profiles and profile != FALLBACK:
         utils.debug(f"{profile!r} is not a profile")
         raise ValueError(f"{profile!r} is not a profile")
 

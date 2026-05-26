@@ -4,12 +4,12 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from pprint import pformat
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Set
 
 from i3ipc import Connection, Event, OutputEvent, OutputReply
 
 from . import config, profile, utils
-from .datatypes import FALLBACK, ApplyOutput, ApplyProfile, Config, Profile
+from .datatypes import FALLBACK, ApplyOutput, ApplyProfile, Config
 
 
 @dataclass
@@ -72,7 +72,8 @@ class DisplayManager:
     ipc: Connection = field(default_factory=Connection)
     current_profile: Optional[str] = None
     _config_file_path: Optional[str] = None
-    _profile_map: dict[str, Profile] = field(default_factory=dict)
+    _profile_set: Set = field(default_factory=set)
+    _output_set: Set = field(default_factory=set)
     _auto: bool = True
 
     def toggle_auto_apply(self) -> None:
@@ -82,11 +83,11 @@ class DisplayManager:
         return self._auto
 
     def update_profile_map(self) -> None:
-        self._profile_map.clear()
-        self._profile_map = {p.name: p for p in self.config.profiles}
+        self._profile_set.clear()
+        self._profile_set = {p.name for p in self.config.profiles}
 
-    def get_profile(self, target_profile: str) -> Optional[str]:
-        return self._profile_map.get(target_profile, None)
+    def is_profile_valid(self, target_profile: str) -> Optional[str]:
+        return target_profile in self._profile_set
 
     def load_config(self, config_file_path: Path) -> None:
         self._config_file_path = config_file_path
@@ -96,6 +97,14 @@ class DisplayManager:
     def reload_config(self) -> None:
         self.load_config(self._config_file_path)
 
+    def update_output_state(self, output_state: List[OutputReply]) -> None:
+        self._output_set.clear()
+        self._output_set = {o.name for o in output_state}
+
+    def is_output_set_changed(self, output_state: List[OutputReply]) -> bool:
+        new_output_set = {o.name for o in output_state}
+        return new_output_set != self._output_set
+
 
 mgr: DisplayManager = DisplayManager(config_loader=config.load_config)
 
@@ -104,7 +113,23 @@ _apply_lock = threading.Lock()
 
 def on_output_event(ipc: Connection, event: OutputEvent) -> None:
     utils.trace(f"handling {event.ipc_data}")
-    apply_profile_auto_select()
+    new_output_list = ipc.get_outputs()
+    is_set_changed = mgr.is_output_set_changed(new_output_list)
+
+    if is_set_changed:
+        # list of output devices has changed
+        utils.debug("output event detected addition/removal of outputs")
+        utils.debug(f"previous profile {mgr.current_profile!r} ==> None")
+        mgr.current_profile = None
+        return apply_profile_auto_select()
+
+
+def apply_profile_fallback() -> None:
+    req_id = uuid.uuid4()
+    with _apply_lock:
+        utils.trace("apply fallback profile")
+        apply_profile(req_id, mgr.ipc, Config(), target_profile_name=FALLBACK)
+        utils.trace(f"--{req_id} completed--")
 
 
 def apply_profile_auto_select() -> None:
@@ -138,26 +163,28 @@ def apply_profile(
         return
 
     utils.trace(f"-------------------{uuid} start --------------------------")
-    outputs: List[OutputReply] = ipc.get_outputs()
+    outputs: List[OutputReply] = mgr.ipc.get_outputs()
 
     if target_profile_name is FALLBACK:
-        utils.debug(
-            f"{target_profile_name!r} is the fallback profile {FALLBACK!r}. use blank config"
-        )
+        utils.debug(f"{target_profile_name!r} is the fallback profile")
         config = Config()
-
-    # check if current_profile still exists in config
-    if mgr.get_profile(target_profile_name) is None:
-        utils.debug(
-            f"{target_profile_name!r} is not in the list of available profiles. switching to auto-selected profile"
-        )
-        target_profile_name = None
+    else:
+        # check if current_profile still exists in config
+        if not mgr.is_profile_valid(target_profile_name):
+            utils.debug(
+                f"{target_profile_name!r} is not in the list of available profiles. switching to auto-selected profile"
+            )
+            target_profile_name = None
 
     target_profile: ApplyProfile = profile.get_profile(
         config, outputs, target_profile_name
     )
 
-    if target_profile_name and target_profile.name == FALLBACK:
+    if (
+        target_profile_name
+        and target_profile_name != FALLBACK
+        and target_profile.name == FALLBACK
+    ):
         raise RuntimeError(f"{target_profile_name!r} cannot be configured")
 
     output_by_name = {o.name: o for o in outputs}
@@ -202,6 +229,7 @@ def apply_profile(
             utils.trace(f"command => {ind}:{cmd}")
             ipc.command(cmd)
 
+    mgr.update_output_state(mgr.ipc.get_outputs())
     mgr.current_profile = target_profile.name
     utils.trace(f"-------------------{uuid} end --------------------------")
 
@@ -255,6 +283,11 @@ def command_handler(command: str) -> str:
 
             profile_name = parts[1]
             utils.info(f"Switching profile to {profile_name}")
+
+            if profile_name == FALLBACK:
+                apply_profile_fallback()
+                return f"Switched to {FALLBACK!r}"
+
             if mgr.get_profile(profile_name) is None:
                 utils.warning(f"{profile_name!r} is not a valid profile.")
                 return f"error: {profile_name!r} is not a valid profile."
@@ -272,6 +305,7 @@ def command_handler(command: str) -> str:
 def start_watcher(config_file_path: Path) -> None:
     mgr.load_config(config_file_path)
     mgr.ipc.on(Event.OUTPUT, on_output_event)
+    mgr.update_output_state(mgr.ipc.get_outputs())
 
     apply_profile_auto_select()
 
