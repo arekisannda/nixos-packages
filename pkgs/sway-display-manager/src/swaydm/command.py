@@ -1,7 +1,7 @@
 import json
 from dataclasses import asdict, dataclass, field
 from pprint import pformat
-from typing import List
+from typing import List, Optional
 
 from . import manager, profile, utils
 from .code import Code
@@ -13,11 +13,11 @@ OK, ERROR = (Code.OK, Code.ERROR)
 @dataclass
 class StatusOutput:
     active: bool
-    profile: str
+    profile: Optional[str]
     current_config: Config
     layout: List[ApplyOutput] = field(default_factory=list)
 
-    def format(self, verbose: bool = False) -> str:
+    def status(self, verbose: bool = False) -> str:
         layout = [
             (
                 f"\n{p.name!r}\t"
@@ -31,7 +31,7 @@ class StatusOutput:
 
         lines = [
             f"Active: {'yes' if self.active else 'no'}",
-            f"Profile: {self.profile}",
+            f"Profile: {self.profile if self.profile else ''}",
             f"Layout: {''.join(layout)}",
         ]
 
@@ -41,7 +41,7 @@ class StatusOutput:
             )
         return "\n".join(lines)
 
-    def format_json(self, verbose: bool = False) -> str:
+    def status_json(self, verbose: bool = False) -> str:
         layout = {
             p.name: {
                 'mode': f"{p.mode.width}x{p.mode.height}@{p.mode.refresh}Hz",
@@ -70,28 +70,34 @@ def command_resp(
     return f"{resp_code}\n{msg}"
 
 
+def switch_profile(profile_name: str) -> str:
+    utils.info(f"Switching profile to {profile_name!r}")
+
+    if profile_name == FALLBACK:
+        manager.apply_profile_fallback()
+        return command_resp(OK, f"Switched to {profile_name!r}")
+
+    if not manager.mgr.is_profile_valid(profile_name):
+        utils.warning(f"{profile_name!r} is not a valid profile.")
+        return command_resp(ERROR, f"{profile_name!r} is not a valid profile.")
+    try:
+        manager.apply_profile_target(profile_name)
+    except RuntimeError as e:
+        utils.warning(f"Failed to apply profile: {e}")
+        return command_resp(ERROR, f"Unable to switch to {profile_name!r}")
+    return command_resp(OK, f"Switched to {profile_name!r}")
+
+
 def command_handler(command: str) -> str:
     parts = command.split()
     if not parts:
         return "error: empty command"
 
     match parts[0]:
-        case "toggle_auto_apply":
-            manager.mgr.toggle_auto_apply()
-            manager.apply_profile_auto_select()
-            utils.info(
-                f"Toggle display manager auto-apply ==> {manager.mgr.is_active()}"
-            )
+        case "toggle_auto_apply" | "enable_auto_apply" | "disable_auto_apply":
+            getattr(manager.mgr, parts[0])()
             if manager.mgr.is_active():
-                return command_resp(OK, "Auto-apply resumed")
-            else:
-                return command_resp(OK, "Auto-apply paused")
-
-        case "enable_auto_apply":
-            manager.mgr.enable_auto_apply()
-            manager.apply_profile_auto_select()
-            utils.info("Enabled display manager auto-apply")
-            if manager.mgr.is_active():
+                manager.apply_profile_auto_select()
                 return command_resp(OK, "Auto-apply resumed")
             else:
                 return command_resp(OK, "Auto-apply paused")
@@ -123,36 +129,11 @@ def command_handler(command: str) -> str:
             )
 
             verbose = len(parts) >= 2 and parts[1] == "verbose"
-            match parts[0]:
-                case "status":
-                    return command_resp(OK, output_info.format(verbose))
-                case "status_json":
-                    return command_resp(OK, output_info.format_json(verbose))
+            return command_resp(OK, getattr(output_info, parts[0])(verbose))
 
         case "switch_profile":
             if len(parts) < 2:
                 return command_resp(ERROR, "usage: switch <profile>")
+            return switch_profile(parts[1])
 
-            profile_name = parts[1]
-            utils.info(f"Switching profile to {profile_name!r}")
-
-            if profile_name == FALLBACK:
-                manager.apply_profile_fallback()
-                return command_resp(OK, f"Switched to {profile_name!r}")
-
-            if not manager.mgr.is_profile_valid(profile_name):
-                utils.warning(f"{profile_name!r} is not a valid profile.")
-                return command_resp(
-                    ERROR, f"{profile_name!r} is not a valid profile."
-                )
-            try:
-                manager.apply_profile_target(profile_name)
-            except RuntimeError as e:
-                utils.warning(f"Failed to apply profile: {e}")
-                return command_resp(
-                    ERROR, f"Unable to switch to {profile_name!r}"
-                )
-            return command_resp(OK, f"Switched to {profile_name!r}")
-
-        case _:
-            return command_resp(ERROR, f"error: unknown command {parts[0]!r}")
+    return command_resp(ERROR, f"error: unknown command {parts[0]!r}")

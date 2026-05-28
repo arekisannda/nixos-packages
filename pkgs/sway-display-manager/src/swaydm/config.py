@@ -4,8 +4,8 @@ from typing import Optional
 
 import yaml
 
-from .datatypes import Config, Display, Profile, Mode, Position, FALLBACK
 from . import utils
+from .datatypes import FALLBACK, Config, Display, Mode, Position, Profile
 
 DEFAULT_CONFIG_FILES = [
     "$XDG_CONFIG_HOME/swaydm/config.yaml",
@@ -47,7 +47,7 @@ def find_config_file(target: str) -> Optional[Path]:
     return None
 
 
-def load_config(path: Path) -> Config:
+def load_config(path: Optional[Path]) -> Config:
     utils.trace(f"load configuration from {str(path)!r}")
     if not path or not path.is_file():
         return Config()

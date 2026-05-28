@@ -21,7 +21,7 @@ def setup(socket: str) -> None:
     mgr.socket = socket
 
 
-def start_server(handler: Callable[[str], None]) -> None:
+def start_server(handler: Callable[[str], str]) -> None:
     if os.path.exists(mgr.socket):
         try:
             # check if socket is already held by a running process
@@ -76,10 +76,12 @@ def send_command(command: str) -> None:
         client.sendall(command.encode())
         client.shutdown(socket.SHUT_WR)
         resp_code, response = parse_response(client.recv(4096).decode())
+
         if resp_code is code.Code.OK:
             print(response)
         else:
             utils.error(response)
+
         client.close()
         code.exit_with_status(resp_code)
     except ConnectionRefusedError:

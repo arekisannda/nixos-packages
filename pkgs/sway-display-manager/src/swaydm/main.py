@@ -53,11 +53,9 @@ def main():
     )
 
     auto_state_parser = auto_parser.add_subparsers(dest="state")
+    auto_state_parser.add_parser("on", help="Enable display manager auto apply")
     auto_state_parser.add_parser(
-        "enable", help="Enable display manager auto apply"
-    )
-    auto_state_parser.add_parser(
-        "disable", help="Disable display manager auto apply"
+        "off", help="Disable display manager auto apply"
     )
     auto_state_parser.add_parser(
         "toggle", help="Toggle display manager auto apply"
@@ -80,9 +78,9 @@ def main():
             match arguments.state:
                 case "toggle":
                     ipc.toggle_auto_apply()
-                case "enable":
+                case "on":
                     ipc.enable_auto_apply()
-                case "disable":
+                case "off":
                     ipc.disable_auto_apply()
                 case _:
                     auto_parser.print_help()

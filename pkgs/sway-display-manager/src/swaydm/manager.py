@@ -4,13 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional, Set
 
-from i3ipc import (
-    BarconfigUpdateEvent,
-    Connection,
-    Event,
-    OutputEvent,
-    OutputReply,
-)
+from i3ipc import Connection, Event, OutputReply
+from i3ipc.events import IpcBaseEvent
 
 from . import config, profile, utils
 from .datatypes import FALLBACK, ApplyProfile, Config
@@ -18,11 +13,11 @@ from .datatypes import FALLBACK, ApplyProfile, Config
 
 @dataclass
 class ManagerState:
-    config_loader: Callable[[Path], Config]
+    config_loader: Callable[[Optional[Path]], Config]
     config: Config = field(default_factory=Config)
     ipc: Connection = field(default_factory=Connection)
     current_profile: Optional[str] = None
-    _config_file_path: Optional[str] = None
+    _config_file_path: Optional[Path] = None
     _profile_set: Set = field(default_factory=set)
     _output_set: Set = field(default_factory=set)
     _auto: bool = True
@@ -43,10 +38,10 @@ class ManagerState:
         self._profile_set.clear()
         self._profile_set = {p.name for p in self.config.profiles}
 
-    def is_profile_valid(self, target_profile: str) -> Optional[str]:
+    def is_profile_valid(self, target_profile: str) -> bool:
         return target_profile in self._profile_set
 
-    def load_config(self, config_file_path: Path) -> None:
+    def load_config(self, config_file_path: Optional[Path]) -> None:
         self._config_file_path = config_file_path
         self.config = self.config_loader(self._config_file_path)
         self.update_profile_map()
@@ -56,10 +51,10 @@ class ManagerState:
 
     def update_output_state(self, output_state: List[OutputReply]) -> None:
         self._output_set.clear()
-        self._output_set = {o.name for o in output_state}
+        self._output_set = {o.name for o in output_state}  # ty:ignore[unresolved-attribute]
 
     def is_output_set_changed(self, output_state: List[OutputReply]) -> bool:
-        new_output_set = {o.name for o in output_state}
+        new_output_set = {o.name for o in output_state}  # ty:ignore[unresolved-attribute]
         return new_output_set != self._output_set
 
 
@@ -68,19 +63,23 @@ mgr: ManagerState = ManagerState(config_loader=config.load_config)
 _apply_lock = threading.Lock()
 
 
-def on_output_event(ipc: Connection, event: OutputEvent) -> None:
+def on_output_event(ipc: Connection, _event: IpcBaseEvent) -> None:
     if not mgr.is_active():
         utils.debug("Display manager auto-apply is paused")
         return
 
-    utils.trace(f"handling {event.ipc_data}")
+    utils.trace("handling output event")
 
-    if mgr.is_output_set_changed(ipc.get_outputs()):
-        # list of output devices has changed
-        utils.debug("output event detected addition/removal of outputs")
-        utils.debug(f"previous profile {mgr.current_profile!r} ==> None")
-        mgr.current_profile = None
-        return apply_profile_auto_select()
+    with _apply_lock:
+        if mgr.is_output_set_changed(ipc.get_outputs()):
+            # list of output devices has changed
+            utils.debug("output event detected addition/removal of outputs")
+            utils.debug(f"previous profile {mgr.current_profile!r} ==> None")
+
+            req_id = uuid.uuid4()
+            utils.trace("apply auto-select profile")
+            apply_profile(req_id, mgr.ipc, mgr.config, target_profile_name=None)
+            utils.trace(f"--{req_id} completed--")
 
 
 def apply_profile_fallback() -> None:
@@ -94,7 +93,9 @@ def apply_profile_fallback() -> None:
 def apply_profile_auto_select() -> None:
     req_id = uuid.uuid4()
     with _apply_lock:
-        utils.trace("apply auto-select profile")
+        utils.trace(
+            f"apply auto-select profile. current profile is {mgr.current_profile}"
+        )
         apply_profile(
             req_id, mgr.ipc, mgr.config, target_profile_name=mgr.current_profile
         )
@@ -125,7 +126,9 @@ def apply_profile(
         config = Config()
     else:
         # check if current_profile still exists in config
-        if not mgr.is_profile_valid(target_profile_name):
+        if target_profile_name and not mgr.is_profile_valid(
+            target_profile_name
+        ):
             utils.debug(
                 f"{target_profile_name!r} is not in the list of available profiles. switching to auto-selected profile"
             )
@@ -142,7 +145,7 @@ def apply_profile(
     ):
         raise RuntimeError(f"{target_profile_name!r} cannot be configured")
 
-    output_by_name = {o.name: o for o in outputs}
+    output_by_name = {o.name: o for o in outputs}  # ty:ignore[unresolved-attribute]
 
     for apply in target_profile.outputs:
         utils.trace(f"checking {apply.name}")
@@ -155,11 +158,15 @@ def apply_profile(
 
         if apply.active:
             m, p = apply.mode, apply.position
-            commands = (
-                f"output {apply.name} enable "
-                f"mode {m.width}x{m.height}@{m.refresh}Hz scale {m.scale} "
-                f"position {p.x} {p.y} "
-            )
+            commands = f"output {apply.name} enable"
+
+            if m:
+                commands += (
+                    f" mode {m.width}x{m.height}@{m.refresh}Hz scale {m.scale}"
+                )
+
+            if p:
+                commands += f" position {p.x} {p.y} "
 
             utils.trace(f"command => {commands}")
             ipc.command(commands)
@@ -189,14 +196,12 @@ def apply_profile(
     utils.trace(f"-------------------{uuid} end --------------------------")
 
 
-def on_config_reload_event(
-    ipc: Connection, event: BarconfigUpdateEvent
-) -> None:
+def on_config_reload_event(_ipc: Connection, _event: IpcBaseEvent) -> None:
     utils.trace("handling Sway configuration reload event")
     apply_profile_auto_select()
 
 
-def start_watcher(config_file_path: Path) -> None:
+def start_watcher(config_file_path: Optional[Path]) -> None:
     mgr.load_config(config_file_path)
     mgr.ipc.on(Event.BARCONFIG_UPDATE, on_config_reload_event)
     mgr.ipc.on(Event.OUTPUT, on_output_event)
@@ -204,5 +209,13 @@ def start_watcher(config_file_path: Path) -> None:
 
     apply_profile_auto_select()
 
-    utils.debug(f"Starting Sway output watcher {str(config_file_path)!r}")
+    if config_file_path:
+        utils.debug(
+            f"Starting Sway output watcher using {str(config_file_path)!r}"
+        )
+    else:
+        utils.debug(
+            "Starting Sway output watcher using fallback configurations"
+        )
+
     mgr.ipc.main()
