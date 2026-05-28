@@ -2,18 +2,19 @@ import logging
 
 TRACE = 5
 logging.addLevelName(TRACE, "TRACE")
-logging.TRACE = TRACE
+logging.TRACE = TRACE  # ty:ignore[unresolved-attribute]
 
 _logger: logging.Logger | None = None
 
 
 class PerLevelFormatter(logging.Formatter):
-    default_fmt = "[%(levelname)s]\t%(message)s"
+    default_fmt = "%(levelname_padded)s %(message)s"
     trace_fmt = (
-        "[%(levelname)s]\t[%(module)s.%(funcName)s:%(lineno)d]: %(message)s"
+        "%(levelname_padded)s [%(module)s.%(funcName)s:%(lineno)d]: %(message)s"
     )
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord):
+        record.levelname_padded = f'[{record.levelname}]'.ljust(10)
         if record.levelno == TRACE:
             self._style._fmt = self.trace_fmt
         else:
