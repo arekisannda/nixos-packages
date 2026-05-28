@@ -77,9 +77,20 @@ def command_handler(command: str) -> str:
 
     match parts[0]:
         case "toggle_auto_apply":
-            utils.info("Toggle display manager auto")
             manager.mgr.toggle_auto_apply()
             manager.apply_profile_auto_select()
+            utils.info(
+                f"Toggle display manager auto-apply ==> {manager.mgr.is_active()}"
+            )
+            if manager.mgr.is_active():
+                return command_resp(OK, "Auto-apply resumed")
+            else:
+                return command_resp(OK, "Auto-apply paused")
+
+        case "enable_auto_apply":
+            manager.mgr.enable_auto_apply()
+            manager.apply_profile_auto_select()
+            utils.info("Enabled display manager auto-apply")
             if manager.mgr.is_active():
                 return command_resp(OK, "Auto-apply resumed")
             else:

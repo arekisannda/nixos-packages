@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser
 
-from . import command, config, ipc, manager, utils
+from . import command, config, ipc, manager, utils, code
 
 
 def main():
@@ -39,6 +39,7 @@ def main():
     status_parser = command_parser.add_parser(
         "status", help="Show display manager status"
     )
+
     status_parser.add_argument(
         "-V", "--verbose", action='store_true', help='Enable verbose output.'
     )
@@ -47,11 +48,24 @@ def main():
         "--json", action='store_true', help='Output in JSON format.'
     )
 
-    command_parser.add_parser("list", help="List available profiles")
-    command_parser.add_parser("reload", help="Reload configuration file")
-    command_parser.add_parser(
+    auto_parser = command_parser.add_parser(
+        "auto", help="Display manager auto apply"
+    )
+
+    auto_state_parser = auto_parser.add_subparsers(dest="state")
+    auto_state_parser.add_parser(
+        "enable", help="Enable display manager auto apply"
+    )
+    auto_state_parser.add_parser(
+        "disable", help="Disable display manager auto apply"
+    )
+    auto_state_parser.add_parser(
         "toggle", help="Toggle display manager auto apply"
     )
+
+    command_parser.add_parser("daemon", help="Run Sway display manager daemon")
+    command_parser.add_parser("list", help="List available profiles")
+    command_parser.add_parser("reload", help="Reload configuration file")
 
     arguments = arguments_parser.parse_args()
     utils.setup(arguments.log_level)
@@ -62,13 +76,26 @@ def main():
             ipc.switch_profile(arguments.profile)
         case "reload":
             ipc.reload_config()
-        case "toggle":
-            ipc.toggle_auto_apply()
+        case "auto":
+            match arguments.state:
+                case "toggle":
+                    ipc.toggle_auto_apply()
+                case "enable":
+                    ipc.enable_auto_apply()
+                case "disable":
+                    ipc.disable_auto_apply()
+                case _:
+                    auto_parser.print_help()
+                    code.exit_with_status(code.Code.ERROR)
+
         case "list":
             ipc.list_profiles()
         case "status":
             ipc.status(verbose=arguments.verbose, json=arguments.json)
-        case _:
+        case "daemon":
             config_path = config.find_config_file(arguments.config)
             ipc.start_server(command.command_handler)
             manager.start_watcher(config_path)
+        case _:
+            arguments_parser.print_help()
+            code.exit_with_status(code.Code.ERROR)

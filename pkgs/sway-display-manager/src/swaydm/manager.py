@@ -30,6 +30,12 @@ class ManagerState:
     def toggle_auto_apply(self) -> None:
         self._auto = not self._auto
 
+    def enable_auto_apply(self) -> None:
+        self._auto = True
+
+    def disable_auto_apply(self) -> None:
+        self._auto = False
+
     def is_active(self) -> bool:
         return self._auto
 

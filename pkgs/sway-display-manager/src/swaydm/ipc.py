@@ -68,19 +68,27 @@ def parse_response(raw: str) -> tuple[code.Code, str]:
 
 
 def send_command(command: str) -> None:
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    client.connect(mgr.socket)
+    try:
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.connect(mgr.socket)
 
-    utils.debug(f"IPC Client - Send: {command!r}")
-    client.sendall(command.encode())
-    client.shutdown(socket.SHUT_WR)
-    resp_code, response = parse_response(client.recv(4096).decode())
-    if resp_code is code.Code.OK:
-        print(response)
-    else:
-        utils.error(response)
-    client.close()
-    sys.exit(code.exit_status(resp_code))
+        utils.debug(f"IPC Client - Send: {command!r}")
+        client.sendall(command.encode())
+        client.shutdown(socket.SHUT_WR)
+        resp_code, response = parse_response(client.recv(4096).decode())
+        if resp_code is code.Code.OK:
+            print(response)
+        else:
+            utils.error(response)
+        client.close()
+        code.exit_with_status(resp_code)
+    except ConnectionRefusedError:
+        resp_code = code.Code.ERROR
+        utils.error(
+            "Unable to connect to display manager. Is swaydm daemon running?"
+        )
+    finally:
+        code.exit_with_status(resp_code)
 
 
 def switch_profile(profile: str) -> None:
@@ -105,6 +113,14 @@ def reload_config() -> None:
 
 def toggle_auto_apply() -> None:
     send_command("toggle_auto_apply")
+
+
+def enable_auto_apply() -> None:
+    send_command("enable_auto_apply")
+
+
+def disable_auto_apply() -> None:
+    send_command("disable_auto_apply")
 
 
 def debug() -> None:
