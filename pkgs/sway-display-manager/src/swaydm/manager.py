@@ -63,6 +63,10 @@ _apply_lock = threading.Lock()
 
 
 def on_output_event(ipc: Connection, event: OutputEvent) -> None:
+    if not mgr.is_active():
+        utils.debug("Display manager auto-apply is paused")
+        return
+
     utils.trace(f"handling {event.ipc_data}")
 
     if mgr.is_output_set_changed(ipc.get_outputs()):
@@ -107,10 +111,6 @@ def apply_profile(
     config: Config,
     target_profile_name: Optional[str],
 ) -> None:
-    if not mgr.is_active():
-        utils.debug("Display manager auto-apply is paused")
-        return
-
     utils.trace(f"-------------------{uuid} start --------------------------")
     outputs: List[OutputReply] = mgr.ipc.get_outputs()
 
