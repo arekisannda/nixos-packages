@@ -1,7 +1,8 @@
 import json
 from dataclasses import asdict, dataclass, field
-from pprint import pformat
 from typing import List, Optional
+
+import yaml
 
 from . import manager, profile, utils
 from .code import Code
@@ -37,8 +38,14 @@ class StatusOutput:
 
         if verbose:
             lines.append(
-                pformat(asdict(self.current_config), width=1, sort_dicts=False)
+                +yaml.dump(
+                    asdict(self.current_config),
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                )
             )
+
         return "\n".join(lines)
 
     def status_json(self, verbose: bool = False) -> str:
@@ -109,10 +116,14 @@ def command_handler(command: str) -> str:
             return command_resp(OK, "Configuration reloaded")
 
         case "list_profiles":
-            return command_resp(
-                OK,
-                f"{'\n'.join([p.name for p in manager.mgr.config.profiles])}",
-            )
+            profile_options: List[str] = [
+                p.name
+                for p in profile.get_valid_profiles(
+                    manager.mgr.config.profiles, manager.mgr.ipc.get_outputs()
+                )
+            ]
+
+            return command_resp(OK, f"{'\n'.join(profile_options)}")
 
         case "status" | "status_json":
             current_profile = profile.get_profile(

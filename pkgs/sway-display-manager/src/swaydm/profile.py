@@ -123,26 +123,14 @@ def get_profile_output_mapping(
     return result
 
 
-def get_profile(
-    config: Config, outputs: List[OutputReply], profile: Optional[str] = None
-) -> ApplyProfile:
-    valid: List[ApplyProfile] = []
+def get_valid_profiles(
+    cand_profiles: List[Profile], outputs: List[OutputReply]
+) -> List[ApplyProfile]:
+    result: List[ApplyProfile] = []
 
-    profiles = (
-        [cl for cl in config.profiles if cl.name == profile]
-        if profile
-        else config.profiles
-    )
-
-    if not profiles and profile != FALLBACK:
-        utils.debug(f"{profile!r} is not a profile")
-        raise ValueError(f"{profile!r} is not a profile")
-
-    for p in profiles:
-        if not p.auto and profile is None:
-            continue
+    for p in cand_profiles:
         try:
-            valid.append(
+            result.append(
                 ApplyProfile(
                     name=p.name,
                     outputs=get_profile_output_mapping(p, outputs),
@@ -152,6 +140,24 @@ def get_profile(
         except ValueError as e:
             utils.debug(f"{p.name!r} cannot be configured - {e}")
             continue
+
+    return result
+
+
+def get_profile(
+    config: Config, outputs: List[OutputReply], profile: Optional[str] = None
+) -> ApplyProfile:
+    profiles = (
+        [p for p in config.profiles if p.name == profile]
+        if profile
+        else [p for p in config.profiles if p.auto]
+    )
+
+    if not profiles and profile != FALLBACK:
+        utils.debug(f"{profile!r} is not a profile")
+        raise ValueError(f"{profile!r} is not a profile")
+
+    valid: List[ApplyProfile] = get_valid_profiles(profiles, outputs)
 
     if valid:
         return valid[0]
