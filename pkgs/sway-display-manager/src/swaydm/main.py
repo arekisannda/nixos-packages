@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser
 
-from . import command, config, ipc, manager, utils, code
+from . import __version__, code, command, config, ipc, manager, utils
 
 
 def main():
@@ -10,6 +10,10 @@ def main():
     command_parser = arguments_parser.add_subparsers(dest="command")
 
     # global options
+    arguments_parser.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}'
+    )
+
     arguments_parser.add_argument(
         '-l',
         '--log-level',

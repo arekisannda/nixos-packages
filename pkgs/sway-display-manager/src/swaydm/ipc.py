@@ -68,6 +68,7 @@ def parse_response(raw: str) -> tuple[code.Code, str]:
 
 
 def send_command(command: str) -> None:
+    resp_code = code.Code.ERROR
     try:
         client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         client.connect(mgr.socket)

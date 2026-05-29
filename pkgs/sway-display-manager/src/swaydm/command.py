@@ -37,9 +37,10 @@ class StatusOutput:
         ]
 
         if verbose:
+            lines.append("\nProfiles:")
             lines.append(
-                +yaml.dump(
-                    asdict(self.current_config),
+                yaml.dump(
+                    asdict(self.current_config).get('profiles', []),
                     default_flow_style=False,
                     allow_unicode=True,
                     sort_keys=False,
