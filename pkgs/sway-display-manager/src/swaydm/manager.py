@@ -51,10 +51,10 @@ class ManagerState:
 
     def update_output_state(self, output_state: List[OutputReply]) -> None:
         self._output_set.clear()
-        self._output_set = {o.name for o in output_state}  # ty:ignore[unresolved-attribute]
+        self._output_set = {o.name for o in output_state}
 
     def is_output_set_changed(self, output_state: List[OutputReply]) -> bool:
-        new_output_set = {o.name for o in output_state}  # ty:ignore[unresolved-attribute]
+        new_output_set = {o.name for o in output_state}
         return new_output_set != self._output_set
 
 
@@ -145,7 +145,7 @@ def apply_profile(
     ):
         raise RuntimeError(f"{target_profile_name!r} cannot be configured")
 
-    output_by_name = {o.name: o for o in outputs}  # ty:ignore[unresolved-attribute]
+    output_by_name = {o.name: o for o in outputs}
 
     for apply in target_profile.outputs:
         utils.trace(f"checking {apply.name}")

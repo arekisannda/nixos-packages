@@ -2,7 +2,7 @@ import logging
 
 TRACE = 5
 logging.addLevelName(TRACE, "TRACE")
-logging.TRACE = TRACE  # ty:ignore[unresolved-attribute]
+logging.TRACE = TRACE
 
 _logger: logging.Logger | None = None
 
