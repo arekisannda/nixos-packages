@@ -27,7 +27,7 @@
             mapAttrs
             ;
 
-          packagesDir = ./pkgs;
+          packagesDir = ./packages;
           custompkgs = readDir packagesDir;
 
           makePackage =
