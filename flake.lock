@@ -18,6 +18,24 @@
         "type": "github"
       }
     },
+    "flake-parts_2": {
+      "inputs": {
+        "nixpkgs-lib": "nixpkgs-lib_2"
+      },
+      "locked": {
+        "lastModified": 1778716662,
+        "narHash": "sha256-m1Yf0wZ8j1OHjTc2UwHwyQRSnNeSgLJOd7q5Y45hzi4=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "f7c1a2d347e4c52d5fb8d10cb4d94b5884e546fb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1774386573,
@@ -49,10 +67,79 @@
         "type": "github"
       }
     },
+    "nixpkgs-lib_2": {
+      "locked": {
+        "lastModified": 1777168982,
+        "narHash": "sha256-GOkGPcboWE9BmGCRMLX3worL4EMnsnG8MyKmXNeYuhQ=",
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
+        "rev": "f5901329dade4a6ea039af1433fb087bd9c1fe14",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
+        "type": "github"
+      }
+    },
+    "nixpkgs-python3": {
+      "locked": {
+        "lastModified": 1780485762,
+        "narHash": "sha256-tpklWxocpROYazB+r+4eVaUwZMZKPZZKYDQ7gJcBGXM=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "fa6a2e8f1f4a91c65147b44015f02aba35053040",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "fa6a2e8f1f4a91c65147b44015f02aba35053040",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1782723713,
+        "narHash": "sha256-oPXCU/SSUokcGaJREHibG1CBX3+s/W7orDWQOZDsEeQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b5aa0fbd538984f6e3d201be0005b4463d8b09f8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "swaydm": "swaydm"
+      }
+    },
+    "swaydm": {
+      "inputs": {
+        "flake-parts": "flake-parts_2",
+        "nixpkgs": "nixpkgs_2",
+        "nixpkgs-python3": "nixpkgs-python3"
+      },
+      "locked": {
+        "lastModified": 1782959800,
+        "narHash": "sha256-JP28h49SZwRKvorOwrTiBpgQT8jhVV7D77o+Pk226nw=",
+        "owner": "arekisannda",
+        "repo": "sway-display-manager",
+        "rev": "d7ecefdf90ec1d8e80af562da16935baf03552b9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "arekisannda",
+        "ref": "v0.0.1",
+        "repo": "sway-display-manager",
+        "type": "github"
       }
     }
   },

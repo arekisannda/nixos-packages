@@ -4,6 +4,8 @@
   inputs = {
     flake-parts.url = "github:hercules-ci/flake-parts";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    swaydm.url = "github:arekisannda/sway-display-manager/?ref=v0.0.1";
   };
 
   outputs =
@@ -17,7 +19,7 @@
       ];
 
       perSystem =
-        { pkgs, ... }:
+        { pkgs, inputs', ... }:
 
         let
           inherit (builtins)
@@ -45,7 +47,9 @@
             };
         in
         {
-          packages = listToAttrs (attrValues (mapAttrs makePackage custompkgs));
+          packages = listToAttrs (attrValues (mapAttrs makePackage custompkgs)) // {
+            swaydm = inputs'.swaydm.packages.default;
+          };
 
           devShells.default = pkgs.mkShell {
             name = "nix packages development shell";
