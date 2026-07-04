@@ -128,16 +128,16 @@
         "nixpkgs-python3": "nixpkgs-python3"
       },
       "locked": {
-        "lastModified": 1782959800,
-        "narHash": "sha256-JP28h49SZwRKvorOwrTiBpgQT8jhVV7D77o+Pk226nw=",
+        "lastModified": 1783123722,
+        "narHash": "sha256-Wgz3tLkKMRNczFZYLtq11xMrU+HbAYFvEoTb1+Ykwis=",
         "owner": "arekisannda",
         "repo": "sway-display-manager",
-        "rev": "d7ecefdf90ec1d8e80af562da16935baf03552b9",
+        "rev": "ff59dc6916339ec5bd83d0a30997e1209881b37d",
         "type": "github"
       },
       "original": {
         "owner": "arekisannda",
-        "ref": "v0.0.1",
+        "ref": "v0.0.2",
         "repo": "sway-display-manager",
         "type": "github"
       }
