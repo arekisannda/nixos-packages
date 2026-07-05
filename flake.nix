@@ -5,7 +5,7 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    swaydm.url = "github:arekisannda/sway-display-manager/?ref=v0.0.2";
+    swaydm.url = "github:arekisannda/sway-display-manager/?ref=v0.1.0";
   };
 
   outputs =
